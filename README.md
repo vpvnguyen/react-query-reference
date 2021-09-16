@@ -1,70 +1,163 @@
 # react-query-reference
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Dev Tools
 
-## Available Scripts
+```jsx
+import { ReactQueryDevtools } from "react-query/devtools";
 
-In the project directory, you can run:
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      {/* The rest of your application */}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+```
 
-### `yarn start`
+## Basic
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+```jsx
+import { QueryClient, QueryClientProvider, useQuery } from "react-query";
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+const queryClient = new QueryClient();
 
-### `yarn test`
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Example />
+    </QueryClientProvider>
+  );
+}
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+function Example() {
+  const { isLoading, error, data } = useQuery("repoData", () =>
+    fetch("https://api.github.com/repos/tannerlinsley/react-query").then(
+      (res) => res.json()
+    )
+  );
 
-### `yarn build`
+  if (isLoading) return "Loading...";
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+  if (error) return "An error has occurred: " + error.message;
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+  return (
+    <div>
+      <h1>{data.name}</h1>
+      <p>{data.description}</p>
+      <strong>👀 {data.subscribers_count}</strong>{" "}
+      <strong>✨ {data.stargazers_count}</strong>{" "}
+      <strong>🍴 {data.forks_count}</strong>
+    </div>
+  );
+}
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Movie Lists
 
-### `yarn eject`
+```jsx
+import { useQueryClient, useQuery, useMutation } from "react-query";
+function MoviesList() {
+  // Access the client
+  const queryClient = useQueryClient();
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+  // Queries
+  const query = useQuery("movies", getMovies);
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+  // Mutations
+  const mutation = useMutation(postMovie, {
+    onSuccess: () => {
+      queryClient.invalidateQueries("movies");
+    },
+  });
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+  return (
+    <div>
+      <ul>
+        {query.data.map((movie) => (
+          <li key={movie.id}> {movie.title} </li>
+        ))}
+      </ul>
+      <button
+        onClick={() => {
+          mutation.mutate({
+            id: Date.now(),
+            title: "Terminator",
+          });
+        }}
+      >
+        Add Movie
+      </button>
+    </div>
+  );
+}
+```
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## No State
 
-## Learn More
+```jsx
+// ###############
+// I don't store return data from query to react state. I just feel like that's an anti-pattern. You should just use the returned data as it is like below:
+const { loading, data, error } = useQuery(SOME_QUERY);
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+// If you absolutely need to cache the mutated data you can do the below. But
+// most of the time you won't need to use useMemo at all.
+const cachedMutatedData = useMemo(() => {
+  if (loading || error) return null;
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+  // mutate data here
+  return data;
+}, [loading, error, data]);
 
-### Code Splitting
+if (loading) return <div>Loader</div>;
+if (error) return <div>Error</div>;
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+// safe to assume data now exist and you can use data.
+const mutatedData = (() => {
+  // if you want to mutate the data for some reason
+  return data;
+})();
 
-### Analyzing the Bundle Size
+return <YourComponent data={mutatedData} />;
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+// ###############
+// But if you must store the returned data, could do below:
+const { loading, data, error } = useQuery(SOME_QUERY);
+const [state, setState] = React.useState([]);
 
-### Making a Progressive Web App
+React.useEffect(() => {
+  // do some checking here to ensure data exist
+  if (data) {
+    // mutate data if you need to
+    setState(data);
+  }
+}, [data]);
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## Displaying Global Background Fetching Loading State
 
-### Advanced Configuration
+In addition to individual query loading states, if you would like to show a global loading indicator when any queries are fetching (including in the background), you can use the useIsFetching hook:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+```jsx
+import { useIsFetching } from "react-query";
 
-### Deployment
+function GlobalLoadingIndicator() {
+  const isFetching = useIsFetching();
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+  return isFetching ? (
+    <div>Queries are fetching in the background...</div>
+  ) : null;
+}
+```
 
-### `yarn build` fails to minify
+## Pagination
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```jsx
+import { useInfiniteQuery } from "react-query";
+
+const { data, error, fetchNextPage, hasNextPage, isFetchingNextPage, status } =
+  useInfiniteQuery("movies", getPopularMovies, {
+    getNextPageParam: (lastPage) =>
+      lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined,
+  });
+```
